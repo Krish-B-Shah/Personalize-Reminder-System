@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth, db, googleProvider } from './firebase';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { authAPI, tokenUtils } from './services/api';
 
 const AuthContext = createContext();
 
@@ -21,26 +22,47 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [authMethod, setAuthMethod] = useState('firebase'); // 'firebase' or 'jwt'
+
+  // Check if we should use JWT authentication
+  const shouldUseJWT = () => {
+    return process.env.REACT_APP_USE_JWT === 'true' || tokenUtils.getToken();
+  };
 
   async function signup(email, password, username) {
     try {
       setError(null);
-      // Create user with email and password
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
       
-      // Update profile with username
-      await updateProfile(user, { displayName: username });
-      
-      // Create a user profile in Firestore
-      await setDoc(doc(db, "users", user.uid), {
-        username,
-        email,
-        displayName: username,
-        createdAt: serverTimestamp()
-      });
-      
-      return userCredential;
+      if (shouldUseJWT()) {
+        // Use new JWT authentication
+        const result = await authAPI.register({
+          email,
+          password,
+          username,
+          role: 'student'
+        });
+        
+        setAuthMethod('jwt');
+        setCurrentUser(result.user);
+        setUserProfile(result.user);
+        return result;
+      } else {
+        // Fallback to Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        await updateProfile(user, { displayName: username });
+        
+        await setDoc(doc(db, "users", user.uid), {
+          username,
+          email,
+          displayName: username,
+          createdAt: serverTimestamp()
+        });
+        
+        setAuthMethod('firebase');
+        return userCredential;
+      }
     } catch (error) {
       console.error("Error in signup:", error);
       setError(error.message);
@@ -54,11 +76,9 @@ export function AuthProvider({ children }) {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
-      // Check if user document exists, if not create it
       const userDoc = await getDoc(doc(db, "users", user.uid));
       
       if (!userDoc.exists()) {
-        // Create a new user document for Google users
         await setDoc(doc(db, "users", user.uid), {
           username: user.displayName,
           email: user.email,
@@ -69,6 +89,7 @@ export function AuthProvider({ children }) {
         });
       }
       
+      setAuthMethod('firebase');
       return result;
     } catch (error) {
       console.error("Error in Google sign-in:", error);
@@ -80,7 +101,21 @@ export function AuthProvider({ children }) {
   async function login(email, password) {
     try {
       setError(null);
-      return await signInWithEmailAndPassword(auth, email, password);
+      
+      if (shouldUseJWT()) {
+        // Use new JWT authentication
+        const result = await authAPI.login(email, password);
+        
+        setAuthMethod('jwt');
+        setCurrentUser(result.user);
+        setUserProfile(result.user);
+        return result;
+      } else {
+        // Fallback to Firebase Auth
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        setAuthMethod('firebase');
+        return result;
+      }
     } catch (error) {
       console.error("Error in login:", error);
       setError(error.message);
@@ -91,8 +126,17 @@ export function AuthProvider({ children }) {
   async function logout() {
     try {
       setError(null);
-      await signOut(auth);
+      
+      if (authMethod === 'jwt') {
+        await authAPI.logout();
+        tokenUtils.clearTokens();
+      } else {
+        await signOut(auth);
+      }
+      
+      setCurrentUser(null);
       setUserProfile(null);
+      setAuthMethod('firebase');
     } catch (error) {
       console.error("Error in logout:", error);
       setError(error.message);
@@ -102,11 +146,17 @@ export function AuthProvider({ children }) {
 
   async function getUserProfile(uid) {
     try {
-      const userDoc = await getDoc(doc(db, "users", uid));
-      if (userDoc.exists()) {
-        const profile = userDoc.data();
-        setUserProfile(profile);
-        return profile;
+      if (authMethod === 'jwt') {
+        const profile = await authAPI.getProfile();
+        setUserProfile(profile.user);
+        return profile.user;
+      } else {
+        const userDoc = await getDoc(doc(db, "users", uid));
+        if (userDoc.exists()) {
+          const profile = userDoc.data();
+          setUserProfile(profile);
+          return profile;
+        }
       }
       return null;
     } catch (error) {
@@ -116,15 +166,27 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // Listen for auth state changes
+  // Enhanced auth state management
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true);
       try {
-        if (user) {
+        if (user && authMethod === 'firebase') {
           setCurrentUser(user);
-          // Get user profile from Firestore
           await getUserProfile(user.uid);
+        } else if (tokenUtils.getToken() && !tokenUtils.isTokenExpired(tokenUtils.getToken())) {
+          // JWT authentication - verify token
+          try {
+            const profile = await authAPI.getProfile();
+            setCurrentUser(profile.user);
+            setUserProfile(profile.user);
+            setAuthMethod('jwt');
+          } catch (error) {
+            // Token invalid, clear it
+            tokenUtils.clearTokens();
+            setCurrentUser(null);
+            setUserProfile(null);
+          }
         } else {
           setCurrentUser(null);
           setUserProfile(null);
@@ -138,6 +200,28 @@ export function AuthProvider({ children }) {
     });
 
     return unsubscribe;
+  }, [authMethod]);
+
+  // Check for JWT token on app load
+  useEffect(() => {
+    const checkJWTAuth = async () => {
+      const token = tokenUtils.getToken();
+      if (token && !tokenUtils.isTokenExpired(token)) {
+        try {
+          const profile = await authAPI.getProfile();
+          setCurrentUser(profile.user);
+          setUserProfile(profile.user);
+          setAuthMethod('jwt');
+        } catch (error) {
+          tokenUtils.clearTokens();
+        }
+      }
+      setLoading(false);
+    };
+
+    if (!loading) {
+      checkJWTAuth();
+    }
   }, []);
 
   const value = {
@@ -148,7 +232,9 @@ export function AuthProvider({ children }) {
     logout,
     loginWithGoogle,
     loading,
-    error
+    error,
+    authMethod,
+    getUserProfile
   };
 
   return (
