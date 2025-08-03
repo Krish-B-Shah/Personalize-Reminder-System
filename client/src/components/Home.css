@@ -1,0 +1,37 @@
+.home-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(to right, #d1fae5, #eff6ff);
+  }
+  
+  .home-card {
+    text-align: center;
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    width: 400px;
+  }
+  
+  .home-button {
+    background-color: #10b981;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-top: 20px;
+  }
+  
+  .home-button:hover {
+    background-color: #059669;
+  }
+  
+  .message {
+    margin-top: 20px;
+    color: #16a34a;
+    font-weight: bold;
+  }
+  
