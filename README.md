@@ -1,5 +1,4 @@
 # Personalize-Reminder-System
-“Personalized internship reminder and tracking system built with React and Firebase, featuring real-time updates, secure authentication, and automated notifications to streamline the internship application process.
 Personalized Internship Reminder & Tracking System
 A modern full-stack web application designed to streamline the internship application process by providing personalized reminders, real-time updates, and an intuitive dashboard to track application statuses.
 
