@@ -5,6 +5,7 @@ import AddInternshipModal from './AddInternshipModal';
 import DetailedView from './DetailedView';
 import { Calendar, Clock, MapPin, Briefcase, Edit, Trash2, PlusCircle, Search } from 'lucide-react';
 import { FirebaseService } from '../services/FirebaseService';
+import apiService from '../services/api';
 import { useAuth } from '../AuthContext';
 
 const Dashboard = () => {
@@ -30,12 +31,34 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchInternships = async () => {
-      if (!currentUser) return;
-      
       try {
         setLoading(true);
-        const userInternships = await FirebaseService.getUserInternships(currentUser.uid);
-        setInternships(userInternships);
+        setError(null);
+        
+        // Use the new API service to get internships
+        const response = await apiService.internships.getInternships();
+        
+        // Map API data format to component expected format
+        const mappedInternships = (response.internships || []).map(internship => ({
+          id: internship.id,
+          companyName: internship.company,
+          positionTitle: internship.title,
+          location: internship.location,
+          description: internship.description,
+          requirements: internship.requirements,
+          type: internship.type,
+          duration: internship.duration,
+          stipend: internship.stipend,
+          applicationDeadline: internship.applicationDeadline,
+          deadline: internship.applicationDeadline,
+          tags: internship.tags,
+          status: internship.status,
+          progress: internship.status, // Map status to progress for compatibility
+          createdAt: internship.createdAt,
+          logoUrl: `/internship.png` // Default logo
+        }));
+        
+        setInternships(mappedInternships);
         setLoading(false);
       } catch (err) {
         console.error("Error fetching internships:", err);
@@ -45,7 +68,7 @@ const Dashboard = () => {
     };
 
     fetchInternships();
-  }, [currentUser]);
+  }, []);
 
   useEffect(() => {
     if (!internships) return;
@@ -58,7 +81,8 @@ const Dashboard = () => {
         internship => (
           (internship.companyName && internship.companyName.toLowerCase().includes(searchLower)) ||
           (internship.positionTitle && internship.positionTitle.toLowerCase().includes(searchLower)) ||
-          (internship.location && internship.location.toLowerCase().includes(searchLower))
+          (internship.location && internship.location.toLowerCase().includes(searchLower)) ||
+          (internship.description && internship.description.toLowerCase().includes(searchLower))
         )
       );
     }
@@ -72,8 +96,8 @@ const Dashboard = () => {
     results.sort((a, b) => {
       switch (sortBy) {
         case 'date': {
-          const dateA = a.createdAt ? new Date(a.createdAt.seconds * 1000) : new Date(0);
-          const dateB = b.createdAt ? new Date(b.createdAt.seconds * 1000) : new Date(0);
+          const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+          const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
           return dateB - dateA;
         }
         case 'company':

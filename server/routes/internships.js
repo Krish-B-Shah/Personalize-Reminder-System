@@ -45,70 +45,213 @@ router.get('/', async (req, res) => {
       order = 'desc'
     } = req.query;
 
-    const db = admin.firestore();
-    let query = db.collection('internships').where('status', '==', 'active');
-
-    // Apply filters
-    if (company) {
-      query = query.where('company', '==', company);
-    }
+    // Check if Firebase is available
+    const { isFirebaseAvailable } = require('../services/firebase');
     
-    if (type) {
-      query = query.where('type', '==', type);
-    }
+    if (isFirebaseAvailable()) {
+      const db = admin.firestore();
+      let query = db.collection('internships').where('status', '==', 'active');
 
-    if (location && location !== 'all') {
-      query = query.where('location', '==', location);
-    }
-
-    // Tags filter (array-contains)
-    if (tags) {
-      const tagArray = tags.split(',');
-      if (tagArray.length > 0) {
-        query = query.where('tags', 'array-contains-any', tagArray);
+      // Apply filters
+      if (company) {
+        query = query.where('company', '==', company);
       }
-    }
+      
+      if (type) {
+        query = query.where('type', '==', type);
+      }
 
-    // Sorting
-    query = query.orderBy(sortBy, order);
+      if (location && location !== 'all') {
+        query = query.where('location', '==', location);
+      }
 
-    // Pagination
-    const offset = (page - 1) * limit;
-    query = query.offset(offset).limit(parseInt(limit));
+      // Tags filter (array-contains)
+      if (tags) {
+        const tagArray = tags.split(',');
+        if (tagArray.length > 0) {
+          query = query.where('tags', 'array-contains-any', tagArray);
+        }
+      }
 
-    const snapshot = await query.get();
-    const internships = [];
+      // Sorting
+      query = query.orderBy(sortBy, order);
 
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      internships.push({
-        id: doc.id,
-        ...data,
-        applicationDeadline: data.applicationDeadline?.toDate?.() || data.applicationDeadline,
-        createdAt: data.createdAt?.toDate?.() || data.createdAt
+      // Pagination
+      const offset = (page - 1) * limit;
+      query = query.offset(offset).limit(parseInt(limit));
+
+      const snapshot = await query.get();
+      const internships = [];
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        internships.push({
+          id: doc.id,
+          ...data,
+          applicationDeadline: data.applicationDeadline?.toDate?.() || data.applicationDeadline,
+          createdAt: data.createdAt?.toDate?.() || data.createdAt
+        });
       });
-    });
 
-    // Simple text search on client side if search term provided
-    let filteredInternships = internships;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredInternships = internships.filter(internship => 
-        internship.title.toLowerCase().includes(searchLower) ||
-        internship.company.toLowerCase().includes(searchLower) ||
-        internship.description.toLowerCase().includes(searchLower) ||
-        internship.requirements.some(req => req.toLowerCase().includes(searchLower))
-      );
-    }
-
-    res.json({
-      internships: filteredInternships,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: filteredInternships.length
+      // Simple text search on client side if search term provided
+      let filteredInternships = internships;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filteredInternships = internships.filter(internship => 
+          internship.title.toLowerCase().includes(searchLower) ||
+          internship.company.toLowerCase().includes(searchLower) ||
+          internship.description.toLowerCase().includes(searchLower) ||
+          internship.requirements.some(req => req.toLowerCase().includes(searchLower))
+        );
       }
-    });
+
+      res.json({
+        internships: filteredInternships,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: filteredInternships.length
+        }
+      });
+    } else {
+      // Demo mode with sample data
+      const sampleInternships = [
+        {
+          id: 'demo1',
+          title: 'Software Engineering Intern',
+          company: 'Capital One',
+          description: 'Join our engineering team to build innovative financial solutions. Work on full-stack development using React, Node.js, and AWS.',
+          requirements: ['JavaScript', 'React', 'Node.js', 'AWS', 'Git'],
+          location: 'McLean, VA',
+          type: 'hybrid',
+          duration: '12 weeks',
+          stipend: 7500,
+          applicationDeadline: new Date('2025-09-01'),
+          tags: ['Software', 'Full-Stack', 'FinTech'],
+          status: 'active',
+          createdAt: new Date('2025-01-15')
+        },
+        {
+          id: 'demo2',
+          title: 'Data Science Intern',
+          company: 'Goldman Sachs',
+          description: 'Work with cutting-edge ML models to analyze financial data and build predictive algorithms for trading strategies.',
+          requirements: ['Python', 'Machine Learning', 'SQL', 'TensorFlow', 'Statistics'],
+          location: 'New York, NY',
+          type: 'on-site',
+          duration: '10 weeks',
+          stipend: 8000,
+          applicationDeadline: new Date('2025-08-15'),
+          tags: ['Data Science', 'Machine Learning', 'Finance'],
+          status: 'active',
+          createdAt: new Date('2025-01-20')
+        },
+        {
+          id: 'demo3',
+          title: 'Product Management Intern',
+          company: 'JPMorgan Chase',
+          description: 'Drive product strategy for digital banking solutions. Collaborate with engineering, design, and business teams.',
+          requirements: ['Product Strategy', 'Analytics', 'SQL', 'Agile', 'Communication'],
+          location: 'Chicago, IL',
+          type: 'hybrid',
+          duration: '12 weeks',
+          stipend: 7000,
+          applicationDeadline: new Date('2025-08-30'),
+          tags: ['Product Management', 'Strategy', 'Banking'],
+          status: 'active',
+          createdAt: new Date('2025-01-25')
+        },
+        {
+          id: 'demo4',
+          title: 'Cybersecurity Analyst Intern',
+          company: 'Bank of America',
+          description: 'Protect critical financial infrastructure. Learn about threat detection, incident response, and security architecture.',
+          requirements: ['Cybersecurity', 'Network Security', 'Python', 'Linux', 'Risk Assessment'],
+          location: 'Charlotte, NC',
+          type: 'on-site',
+          duration: '10 weeks',
+          stipend: 6800,
+          applicationDeadline: new Date('2025-09-10'),
+          tags: ['Cybersecurity', 'Risk Management', 'Infrastructure'],
+          status: 'active',
+          createdAt: new Date('2025-02-01')
+        },
+        {
+          id: 'demo5',
+          title: 'Quantitative Research Intern',
+          company: 'Two Sigma',
+          description: 'Apply mathematical and statistical models to financial markets. Work with large datasets and implement trading algorithms.',
+          requirements: ['Mathematics', 'Statistics', 'Python', 'C++', 'Financial Modeling'],
+          location: 'New York, NY',
+          type: 'on-site',
+          duration: '12 weeks',
+          stipend: 9000,
+          applicationDeadline: new Date('2025-08-20'),
+          tags: ['Quantitative', 'Research', 'Trading'],
+          status: 'active',
+          createdAt: new Date('2025-02-05')
+        },
+        {
+          id: 'demo6',
+          title: 'UX Design Intern',
+          company: 'Visa',
+          description: 'Design user-friendly payment experiences. Create wireframes, prototypes, and conduct user research for digital products.',
+          requirements: ['UI/UX Design', 'Figma', 'Prototyping', 'User Research', 'Adobe Creative Suite'],
+          location: 'San Francisco, CA',
+          type: 'remote',
+          duration: '12 weeks',
+          stipend: 7200,
+          applicationDeadline: new Date('2025-09-05'),
+          tags: ['Design', 'UX/UI', 'Digital Products'],
+          status: 'active',
+          createdAt: new Date('2025-02-10')
+        }
+      ];
+
+      // Apply filters to sample data
+      let filteredInternships = sampleInternships;
+
+      if (company) {
+        filteredInternships = filteredInternships.filter(i => 
+          i.company.toLowerCase().includes(company.toLowerCase())
+        );
+      }
+
+      if (type) {
+        filteredInternships = filteredInternships.filter(i => i.type === type);
+      }
+
+      if (location && location !== 'all') {
+        filteredInternships = filteredInternships.filter(i => 
+          i.location.toLowerCase().includes(location.toLowerCase())
+        );
+      }
+
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filteredInternships = filteredInternships.filter(internship => 
+          internship.title.toLowerCase().includes(searchLower) ||
+          internship.company.toLowerCase().includes(searchLower) ||
+          internship.description.toLowerCase().includes(searchLower) ||
+          internship.requirements.some(req => req.toLowerCase().includes(searchLower))
+        );
+      }
+
+      // Pagination
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + parseInt(limit);
+      const paginatedInternships = filteredInternships.slice(startIndex, endIndex);
+
+      res.json({
+        internships: paginatedInternships,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: filteredInternships.length
+        },
+        demo: true
+      });
+    }
 
   } catch (error) {
     console.error('Get internships error:', error);
@@ -120,23 +263,71 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const db = admin.firestore();
     
-    const doc = await db.collection('internships').doc(id).get();
+    // Check if Firebase is available
+    const { isFirebaseAvailable } = require('../services/firebase');
     
-    if (!doc.exists) {
-      return res.status(404).json({ error: 'Internship not found' });
-    }
-
-    const data = doc.data();
-    res.json({
-      internship: {
-        id: doc.id,
-        ...data,
-        applicationDeadline: data.applicationDeadline?.toDate?.() || data.applicationDeadline,
-        createdAt: data.createdAt?.toDate?.() || data.createdAt
+    if (isFirebaseAvailable()) {
+      const db = admin.firestore();
+      
+      const doc = await db.collection('internships').doc(id).get();
+      
+      if (!doc.exists) {
+        return res.status(404).json({ error: 'Internship not found' });
       }
-    });
+
+      const data = doc.data();
+      res.json({
+        internship: {
+          id: doc.id,
+          ...data,
+          applicationDeadline: data.applicationDeadline?.toDate?.() || data.applicationDeadline,
+          createdAt: data.createdAt?.toDate?.() || data.createdAt
+        }
+      });
+    } else {
+      // Demo mode - return sample data based on ID
+      const sampleInternships = {
+        'demo1': {
+          id: 'demo1',
+          title: 'Software Engineering Intern',
+          company: 'Capital One',
+          description: 'Join our engineering team to build innovative financial solutions. Work on full-stack development using React, Node.js, and AWS. You\'ll contribute to real products used by millions of customers.',
+          requirements: ['JavaScript', 'React', 'Node.js', 'AWS', 'Git'],
+          location: 'McLean, VA',
+          type: 'hybrid',
+          duration: '12 weeks',
+          stipend: 7500,
+          applicationDeadline: new Date('2025-09-01'),
+          tags: ['Software', 'Full-Stack', 'FinTech'],
+          status: 'active',
+          createdAt: new Date('2025-01-15')
+        },
+        'demo2': {
+          id: 'demo2',
+          title: 'Data Science Intern',
+          company: 'Goldman Sachs',
+          description: 'Work with cutting-edge ML models to analyze financial data and build predictive algorithms for trading strategies.',
+          requirements: ['Python', 'Machine Learning', 'SQL', 'TensorFlow', 'Statistics'],
+          location: 'New York, NY',
+          type: 'on-site',
+          duration: '10 weeks',
+          stipend: 8000,
+          applicationDeadline: new Date('2025-08-15'),
+          tags: ['Data Science', 'Machine Learning', 'Finance'],
+          status: 'active',
+          createdAt: new Date('2025-01-20')
+        }
+        // Add more as needed
+      };
+
+      const internship = sampleInternships[id];
+      if (!internship) {
+        return res.status(404).json({ error: 'Internship not found' });
+      }
+
+      res.json({ internship, demo: true });
+    }
 
   } catch (error) {
     console.error('Get internship error:', error);
