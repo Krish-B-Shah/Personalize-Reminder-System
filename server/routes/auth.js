@@ -51,47 +51,70 @@ router.post('/register', registerValidation, handleValidationErrors, async (req,
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create user in Firebase Auth (for compatibility)
-    const userRecord = await admin.auth().createUser({
-      email,
-      password,
-      displayName: username
-    });
-
-    // Set custom claims for RBAC
-    await admin.auth().setCustomUserClaims(userRecord.uid, { role });
-
-    // Create user profile in Firestore
-    const db = admin.firestore();
-    await db.collection('users').doc(userRecord.uid).set({
-      username,
-      email,
-      role,
-      hashedPassword, // Store for JWT auth
-      displayName: username,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      authMethod: 'jwt_custom',
-      profileComplete: false,
-      skills: [],
-      preferences: {
-        emailNotifications: true,
-        reminderFrequency: 'daily'
-      }
-    });
-
-    // Generate JWT tokens
-    const tokens = generateTokens({ uid: userRecord.uid, email, role });
-
-    res.status(201).json({
-      message: 'User registered successfully',
-      user: {
-        uid: userRecord.uid,
+    // Check if Firebase is available
+    const { isFirebaseAvailable } = require('../services/firebase');
+    
+    if (isFirebaseAvailable()) {
+      // Create user in Firebase Auth (for compatibility)
+      const userRecord = await admin.auth().createUser({
         email,
+        password,
+        displayName: username
+      });
+
+      // Set custom claims for RBAC
+      await admin.auth().setCustomUserClaims(userRecord.uid, { role });
+
+      // Create user profile in Firestore
+      const db = admin.firestore();
+      await db.collection('users').doc(userRecord.uid).set({
         username,
-        role
-      },
-      tokens
-    });
+        email,
+        role,
+        hashedPassword, // Store for JWT auth
+        displayName: username,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        authMethod: 'jwt_custom',
+        profileComplete: false,
+        skills: [],
+        preferences: {
+          emailNotifications: true,
+          reminderFrequency: 'daily'
+        }
+      });
+
+      // Generate JWT tokens
+      const tokens = generateTokens({ uid: userRecord.uid, email, role });
+
+      res.status(201).json({
+        message: 'User registered successfully',
+        user: {
+          uid: userRecord.uid,
+          email,
+          username,
+          role
+        },
+        tokens
+      });
+    } else {
+      // Pure JWT mode (no Firebase)
+      const uid = `jwt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // In a real app, you'd store this in your database
+      // For demo purposes, we'll just generate tokens
+      const tokens = generateTokens({ uid, email, role });
+
+      res.status(201).json({
+        message: 'User registered successfully (Demo Mode)',
+        user: {
+          uid,
+          email,
+          username,
+          role
+        },
+        tokens
+      });
+    }
 
   } catch (error) {
     console.error('Registration error:', error);
@@ -107,47 +130,74 @@ router.post('/login', loginValidation, handleValidationErrors, async (req, res) 
   try {
     const { email, password } = req.body;
 
-    // Get user from Firebase Auth
-    const userRecord = await admin.auth().getUserByEmail(email);
+    // Check if Firebase is available
+    const { isFirebaseAvailable } = require('../services/firebase');
     
-    // Get user profile from Firestore
-    const db = admin.firestore();
-    const userDoc = await db.collection('users').doc(userRecord.uid).get();
-    
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User profile not found' });
-    }
+    if (isFirebaseAvailable()) {
+      // Get user from Firebase Auth
+      const userRecord = await admin.auth().getUserByEmail(email);
+      
+      // Get user profile from Firestore
+      const db = admin.firestore();
+      const userDoc = await db.collection('users').doc(userRecord.uid).get();
+      
+      if (!userDoc.exists) {
+        return res.status(404).json({ error: 'User profile not found' });
+      }
 
-    const userData = userDoc.data();
+      const userData = userDoc.data();
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, userData.hashedPassword);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+      // Verify password
+      const isValidPassword = await bcrypt.compare(password, userData.hashedPassword);
+      if (!isValidPassword) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
 
-    // Generate JWT tokens
-    const tokens = generateTokens({
-      uid: userRecord.uid,
-      email: userRecord.email,
-      role: userData.role
-    });
-
-    // Update last login
-    await db.collection('users').doc(userRecord.uid).update({
-      lastLogin: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    res.json({
-      message: 'Login successful',
-      user: {
+      // Generate JWT tokens
+      const tokens = generateTokens({
         uid: userRecord.uid,
         email: userRecord.email,
-        username: userData.username,
         role: userData.role
-      },
-      tokens
-    });
+      });
+
+      // Update last login
+      await db.collection('users').doc(userRecord.uid).update({
+        lastLogin: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      res.json({
+        message: 'Login successful',
+        user: {
+          uid: userRecord.uid,
+          email: userRecord.email,
+          username: userData.username,
+          role: userData.role
+        },
+        tokens
+      });
+    } else {
+      // Pure JWT mode (demo mode without Firebase)
+      // For demo purposes, we'll allow any email/password combo
+      if (email && password && password.length >= 6) {
+        const uid = `demo_${Date.now()}`;
+        const role = 'student';
+        
+        const tokens = generateTokens({ uid, email, role });
+
+        res.json({
+          message: 'Login successful (Demo Mode)',
+          user: {
+            uid,
+            email,
+            username: email.split('@')[0],
+            role
+          },
+          tokens
+        });
+      } else {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    }
 
   } catch (error) {
     console.error('Login error:', error);

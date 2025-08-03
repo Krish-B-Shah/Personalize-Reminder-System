@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 
 let firebaseInitialized = false;
+let firebaseAvailable = false;
 
 const initializeFirebase = () => {
   if (firebaseInitialized) {
@@ -9,6 +10,18 @@ const initializeFirebase = () => {
   }
 
   try {
+    // Check if any Firebase credentials are available
+    const hasCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS || 
+                          process.env.FIREBASE_PROJECT_ID || 
+                          process.env.FIREBASE_PRIVATE_KEY;
+
+    if (!hasCredentials) {
+      console.log('⚠️ No Firebase credentials found. Running in demo mode without Firebase.');
+      firebaseInitialized = true;
+      firebaseAvailable = false;
+      return;
+    }
+
     // Initialize Firebase Admin SDK
     if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       // Using service account file
@@ -38,12 +51,17 @@ const initializeFirebase = () => {
     }
 
     firebaseInitialized = true;
+    firebaseAvailable = true;
     console.log('✅ Firebase Admin SDK initialized successfully');
 
   } catch (error) {
     console.error('❌ Error initializing Firebase Admin SDK:', error);
-    throw error;
+    console.log('⚠️ Continuing without Firebase. Some features may be limited.');
+    firebaseInitialized = true;
+    firebaseAvailable = false;
   }
 };
 
-module.exports = { initializeFirebase };
+const isFirebaseAvailable = () => firebaseAvailable;
+
+module.exports = { initializeFirebase, isFirebaseAvailable };
