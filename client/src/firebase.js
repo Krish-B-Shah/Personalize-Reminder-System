@@ -14,13 +14,13 @@ import {
 } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAkebmRtxMc4bSbvPBdmC493xz5URJ3PG0",
-  authDomain: "internshiptracker-344f5.firebaseapp.com",
-  projectId: "internshiptracker-344f5",
-  storageBucket: "internshiptracker-344f5.appspot.com",
-  messagingSenderId: "230970171771",
-  appId: "1:230970171771:web:1cd9330a1fbc380d591dde",
-  measurementId: "G-BFTG8WSTGJ"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 let app, auth, db, storage;
